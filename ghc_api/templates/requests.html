@@ -302,6 +302,50 @@
         .json-boolean { color: #569cd6; }
         .json-null { color: #569cd6; }
 
+        /* Truncated long strings (click to expand) */
+        .truncated-text {
+            display: inline;
+        }
+
+        .truncated-text-toggle {
+            display: inline-block;
+            cursor: pointer;
+            margin: 0 0.25rem;
+            padding: 0 0.4rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #b45309;
+            background: rgba(251, 191, 36, 0.18);
+            border: 1px solid rgba(180, 83, 9, 0.35);
+            border-radius: 3px;
+            text-decoration: none;
+            user-select: none;
+            vertical-align: baseline;
+            white-space: nowrap;
+            line-height: 1.4;
+        }
+
+        .truncated-text-toggle:hover {
+            background: rgba(251, 191, 36, 0.35);
+            text-decoration: none;
+        }
+
+        /* Dark backgrounds: JSON tree, tool input */
+        .json-tree-display .truncated-text-toggle,
+        pre.json-display .truncated-text-toggle,
+        .tool-use-input .truncated-text-toggle {
+            color: #f9c74f;
+            background: rgba(249, 199, 79, 0.12);
+            border-color: rgba(249, 199, 79, 0.4);
+        }
+
+        .json-tree-display .truncated-text-toggle:hover,
+        pre.json-display .truncated-text-toggle:hover,
+        .tool-use-input .truncated-text-toggle:hover {
+            background: rgba(249, 199, 79, 0.28);
+        }
+
         /* Parsed message styles */
         .parsed-content {
             display: flex;
@@ -1062,6 +1106,39 @@
             return div.innerHTML;
         }
 
+        // Long string values are collapsed by default. Click the toggle to expand.
+        const TRUNCATE_THRESHOLD = 300;
+
+        function renderTruncatedText(text, limit = TRUNCATE_THRESHOLD) {
+            if (text === null || text === undefined) {
+                return '';
+            }
+            if (typeof text !== 'string') {
+                text = String(text);
+            }
+            if (text.length <= limit) {
+                return escapeHtml(text);
+            }
+            const hiddenChars = text.length - limit;
+            const visibleEscaped = escapeHtml(text.slice(0, limit));
+            const hiddenEscaped = escapeHtml(text.slice(limit));
+            return `<span class="truncated-text" data-hidden-chars="${hiddenChars}"><span class="truncated-text-visible">${visibleEscaped}</span><span class="truncated-text-hidden" hidden>${hiddenEscaped}</span><a href="javascript:void(0)" class="truncated-text-toggle" onclick="return toggleTruncatedText(this)">… show ${formatNumber(hiddenChars)} more chars</a></span>`;
+        }
+
+        function toggleTruncatedText(toggle) {
+            const wrapper = toggle.closest('.truncated-text');
+            if (!wrapper) return false;
+            const hidden = wrapper.querySelector('.truncated-text-hidden');
+            if (!hidden) return false;
+            const willExpand = hidden.hidden;
+            hidden.hidden = !willExpand;
+            const hiddenChars = wrapper.dataset.hiddenChars || '';
+            toggle.textContent = willExpand
+                ? 'show less'
+                : `… show ${formatNumber(Number(hiddenChars))} more chars`;
+            return false;
+        }
+
         function syntaxHighlight(json) {
             if (json === null || json === undefined) {
                 return '<span class="json-null">null</span>';
@@ -1161,7 +1238,7 @@
                 return '<span class="json-null">null</span>';
             }
             if (typeof value === 'string') {
-                return `<span class="json-string">${escapeHtml(JSON.stringify(value))}</span>`;
+                return `<span class="json-string">${renderTruncatedText(JSON.stringify(value))}</span>`;
             }
             if (typeof value === 'number') {
                 return `<span class="json-number">${escapeHtml(String(value))}</span>`;
@@ -1213,7 +1290,7 @@
         }
 
         function renderPreformatted(value) {
-            return `<pre>${escapeHtml(safeStringify(value))}</pre>`;
+            return `<pre>${renderTruncatedText(safeStringify(value))}</pre>`;
         }
 
         function renderToggleIndicator() {
@@ -1279,7 +1356,7 @@
                     ${renderToggleIndicator()}
                 </summary>
                 <div class="tool-use-body">
-                    <div class="tool-use-input">${escapeHtml(payloadText)}</div>
+                    <div class="tool-use-input">${renderTruncatedText(payloadText)}</div>
                     ${extraContentHtml || ''}
                 </div>
             </details>`;

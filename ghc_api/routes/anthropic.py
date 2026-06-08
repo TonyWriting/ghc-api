@@ -44,6 +44,7 @@ COPILOT_SUPPORTED_FIELDS = {
 OUTPUT_CONFIG_SUPPORTED_MODELS = {
     "claude-opus-4.6-1m",
     "claude-opus-4.7-1m-internal",
+    "claude-opus-4.8",  # native 1M context, effort accepts low/medium/high/xhigh/max
 }
 
 
