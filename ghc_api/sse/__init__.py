@@ -16,11 +16,12 @@ from .anthropic_direct import (
     AnthropicDirectStreamHandler,
     AnthropicDirectStreamHandlerWithRecovery,
 )
-from .openai_responses import OpenAIResponsesStreamHandler
+from .openai_responses import OpenAIResponsesStreamHandler, RetryingResponsesResponse
 
 __all__ = [
     "SSEStreamHandler",
     "AnthropicDirectStreamHandler",
     "AnthropicDirectStreamHandlerWithRecovery",
     "OpenAIResponsesStreamHandler",
+    "RetryingResponsesResponse",
 ]
