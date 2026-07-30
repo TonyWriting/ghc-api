@@ -127,6 +127,8 @@ def main():
             state.disable_onedrive_access = bool(config['disable_onedrive_access'])
         if 'enable_tool_call_recovery' in config:
             state.enable_tool_call_recovery = bool(config['enable_tool_call_recovery'])
+        if 'enable_responses_early_failure_retry' in config:
+            state.enable_responses_early_failure_retry = bool(config['enable_responses_early_failure_retry'])
         if 'session_flush_interval' in config:
             state.session_flush_interval = int(config['session_flush_interval'])
 
