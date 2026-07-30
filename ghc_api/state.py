@@ -64,8 +64,8 @@ class State:
         self.web_search_proxy_endpoint: str = ""
 
         # User authentication settings
-        # When True, /v1/chat/completions, /v1/messages, /v1/responses, /v1/models
-        # require an approved token from the user registry (users.json).
+        # When True, /v1/chat/completions, /v1/messages, /v1/responses,
+        # /v1/embeddings, and /v1/models require an approved user token.
         # When False (default), all requests are tagged with user_id="anonymous"
         # and no auth check is performed.
         self.enable_auth: bool = False

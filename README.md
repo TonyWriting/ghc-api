@@ -4,7 +4,7 @@ A Python Flask application that serves as a proxy server for GitHub Copilot API,
 
 ## Features
 
-- **OpenAI API Compatibility**: `/v1/chat/completions` endpoint
+- **OpenAI API Compatibility**: `/v1/chat/completions`, `/v1/responses`, and `/v1/embeddings` endpoints
 - **Anthropic API Compatibility**: `/v1/messages` endpoint with automatic request/response translation
 - **Model Listing**: `/v1/models` endpoint listing available models
 - **Model Name Mapping**: Translate model names with exact and prefix-based matching
@@ -240,7 +240,7 @@ ghc-api --enable-auth
 #   enable_auth: true
 ```
 
-Once enabled, LLM endpoints (`/v1/chat/completions`, `/v1/messages`, `/v1/responses`, `/v1/models`, plus their non-`/v1` aliases) require an approved user token. Dashboard and admin endpoints stay open at the Flask layer — they're expected to be gated by a reverse proxy in production (see [Production Deployment](#production-deployment)).
+Once enabled, LLM endpoints (`/v1/chat/completions`, `/v1/messages`, `/v1/responses`, `/v1/embeddings`, `/v1/models`, plus their non-`/v1` aliases) require an approved user token. Dashboard and admin endpoints stay open at the Flask layer — they're expected to be gated by a reverse proxy in production (see [Production Deployment](#production-deployment)).
 
 **Self-signup flow**:
 
@@ -313,6 +313,8 @@ The registry file is re-read whenever its mtime changes (checked every 5 seconds
 
 - `POST /v1/chat/completions` - Chat completions
 - `POST /chat/completions` - Chat completions (without v1 prefix)
+- `POST /v1/embeddings` - Create embeddings
+- `POST /embeddings` - Create embeddings (without v1 prefix)
 - `GET /v1/models` - List available models
 - `GET /models` - List available models (without v1 prefix)
 
@@ -458,7 +460,7 @@ When you expose ghc-api beyond `localhost` (sharing a single instance with other
 
 | Category | Paths | How to gate |
 |---|---|---|
-| **Public — LLM API** | `POST /v1/chat/completions`, `/chat/completions`, `/v1/messages`, `/v1/messages/count_tokens`, `/v1/responses`, `/responses`, `GET /v1/models`, `/models`, `/v1/models/full/`, `/models/full/` | No basic-auth (clients send `Authorization: Bearer <user-token>`); ghc-api's own middleware checks the user token when `enable_auth=true` |
+| **Public — LLM API** | `POST /v1/chat/completions`, `/chat/completions`, `/v1/messages`, `/v1/messages/count_tokens`, `/v1/responses`, `/responses`, `/v1/embeddings`, `/embeddings`, `GET /v1/models`, `/models`, `/v1/models/full/`, `/models/full/` | No basic-auth (clients send `Authorization: Bearer <user-token>`); ghc-api's own middleware checks the user token when `enable_auth=true` |
 | **Public — signup** | `GET /signup`, `POST /signup`, `GET /api/users-list` (token-redacted) | No basic-auth — anyone may request an account |
 | **Admin — user mgmt** | `GET /api/users`, `POST /api/users/<id>/approve`, `POST /api/users/<id>/revoke`, `DELETE /api/users/<id>` | basic-auth — `GET /api/users` returns plaintext tokens |
 | **Admin — config & data** | `POST /api/runtime-config`, `POST /api/config-manager/install-tools`, `POST /api/config-manager/sync-to-onedrive`, `POST /api/config-manager/sync-from-onedrive`, `POST /api/requests/import` | basic-auth — affect global state |
