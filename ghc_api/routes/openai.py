@@ -23,7 +23,7 @@ from ..auth import redact_auth_headers
 from ..cache import cache
 from ..counters import counters
 from ..config import chat_completions_model_support
-from ..sse import OpenAIResponsesStreamHandler
+from ..sse import OpenAIResponsesStreamHandler, RetryingResponsesResponse
 from ..sse.keepalive import KEEPALIVE, iter_lines_with_keepalive
 from ..state import state
 from ..streaming import reconstruct_openai_response_from_chunks
@@ -1216,8 +1216,25 @@ def responses():
                 )
                 if use_streaming:
                     if response.ok:
-                        return OpenAIResponsesStreamHandler(
+                        def retry_streaming_response():
+                            ensure_copilot_token()
+                            retry_headers = get_copilot_headers(enable_vision)
+                            return requests.post(
+                                f"{get_copilot_base_url()}/v1/responses",
+                                headers=retry_headers,
+                                json=payload,
+                                stream=True,
+                                timeout=state.upstream_read_timeout,
+                            )
+
+                        retrying_response = RetryingResponsesResponse(
                             response=response,
+                            response_factory=retry_streaming_response,
+                            max_retries=state.max_connection_retries,
+                            request_id=request_id,
+                        )
+                        return OpenAIResponsesStreamHandler(
+                            response=retrying_response,
                             request_id=request_id,
                             request_size=request_size,
                             start_time=start_time,

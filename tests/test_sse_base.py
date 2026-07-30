@@ -12,7 +12,11 @@ from unittest import mock
 import requests
 
 from ghc_api.cache import RequestCache
-from ghc_api.sse import AnthropicDirectStreamHandler, OpenAIResponsesStreamHandler
+from ghc_api.sse import (
+    AnthropicDirectStreamHandler,
+    OpenAIResponsesStreamHandler,
+    RetryingResponsesResponse,
+)
 from ghc_api.sse import base as base_module
 
 
@@ -24,6 +28,7 @@ class _FakeResponse:
         self.status_code = status_code
         self.ok = status_code < 400
         self.text = ""
+        self.closed = False
 
     def iter_lines(self):
         for line in self._lines:
@@ -32,7 +37,7 @@ class _FakeResponse:
             yield line
 
     def close(self):
-        pass
+        self.closed = True
 
 
 def _collect(generator):
@@ -205,6 +210,92 @@ class OpenAIResponsesPassthroughTest(unittest.TestCase):
         self.assertEqual(entry["input_tokens"], 12)
         self.assertEqual(entry["output_tokens"], 4)
         self.assertEqual(entry["cache_creation_input_tokens"], 2)
+
+    def test_terminal_response_failed_is_recorded_as_error(self):
+        failed = json.dumps({
+            "type": "response.failed",
+            "response": {"error": None, "status": "failed"},
+        })
+        handler = OpenAIResponsesStreamHandler(
+            response=_FakeResponse([
+                b"event: response.failed",
+                f"data: {failed}".encode(),
+            ]),
+            request_id="req-failed",
+            request_size=10,
+            start_time=0.0,
+            original_model="gpt-5",
+            translated_model="gpt-5",
+            request_body_for_cache={"model": "gpt-5"},
+        )
+
+        _collect(handler._generate())
+
+        entry = self.cache.get_request("req-failed")
+        self.assertEqual(entry["status_code"], 502)
+        self.assertEqual(entry["state"], RequestCache.STATE_ERROR)
+
+
+class RetryingResponsesResponseTest(unittest.TestCase):
+    @staticmethod
+    def _event(event_type, **extra):
+        return f'data: {json.dumps({"type": event_type, **extra})}'.encode()
+
+    def test_retries_early_response_failed_without_forwarding_failed_attempt(self):
+        first = _FakeResponse([
+            b"event: response.created",
+            self._event("response.created", marker="first"),
+            b"event: response.failed",
+            self._event("response.failed", response={"error": None}),
+        ])
+        second = _FakeResponse([
+            b"event: response.created",
+            self._event("response.created", marker="second"),
+            b"event: response.output_text.delta",
+            self._event("response.output_text.delta", delta="ok"),
+            b"event: response.completed",
+            self._event("response.completed", response={"usage": {}}),
+        ])
+        retry_count = 0
+
+        def retry():
+            nonlocal retry_count
+            retry_count += 1
+            return second
+
+        response = RetryingResponsesResponse(first, retry, 1, "req-retry")
+        output = list(response.iter_lines())
+
+        self.assertEqual(retry_count, 1)
+        self.assertTrue(first.closed)
+        self.assertNotIn(self._event("response.created", marker="first"), output)
+        self.assertFalse(any(b"response.failed" in line for line in output))
+        self.assertIn(self._event("response.created", marker="second"), output)
+        self.assertIn(self._event("response.output_text.delta", delta="ok"), output)
+
+    def test_does_not_retry_after_output_has_started(self):
+        first = _FakeResponse([
+            self._event("response.created"),
+            self._event("response.output_text.delta", delta="partial"),
+            self._event("response.failed", response={"error": None}),
+        ])
+        retry = mock.Mock()
+
+        output = list(RetryingResponsesResponse(first, retry, 3, "req-partial").iter_lines())
+
+        retry.assert_not_called()
+        self.assertTrue(any(b"response.failed" in line for line in output))
+
+    def test_forwards_failure_after_retry_budget_is_exhausted(self):
+        failed_line = self._event("response.failed", response={"error": None})
+        first = _FakeResponse([self._event("response.created"), failed_line])
+        second = _FakeResponse([self._event("response.created"), failed_line])
+        retry = mock.Mock(return_value=second)
+
+        output = list(RetryingResponsesResponse(first, retry, 1, "req-exhausted").iter_lines())
+
+        retry.assert_called_once_with()
+        self.assertIn(failed_line, output)
 
 
 class SSEKeepaliveIntegrationTest(unittest.TestCase):
