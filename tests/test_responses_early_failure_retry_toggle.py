@@ -1,8 +1,7 @@
-"""The early-stream-failure retry must be fully opt-in.
+"""The early-stream-failure retry is enabled by default but remains configurable.
 
-``state.enable_responses_early_failure_retry`` follows the
-``enable_tool_call_recovery`` convention: when it is off the retry wrapper is
-never constructed, so the upstream ``requests.Response`` reaches the stream
+When ``state.enable_responses_early_failure_retry`` is off, the retry wrapper
+is never constructed, so the upstream ``requests.Response`` reaches the stream
 handler untouched and the feature is a true no-op.
 """
 
@@ -65,8 +64,8 @@ class ResponsesEarlyFailureRetryToggleTest(unittest.TestCase):
 
         return captured.get("response")
 
-    def test_disabled_by_default(self):
-        self.assertFalse(ghc_api.state.State().enable_responses_early_failure_retry)
+    def test_enabled_by_default(self):
+        self.assertTrue(ghc_api.state.State().enable_responses_early_failure_retry)
 
     def test_upstream_response_is_untouched_when_disabled(self):
         self.state.enable_responses_early_failure_retry = False

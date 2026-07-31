@@ -49,9 +49,9 @@ class State:
         # just response.created followed by response.failed, before any model output.
         # When enabled, such a stream is transparently retried (up to
         # max_connection_retries) as long as nothing has been forwarded to the client
-        # yet. Disabled by default; when off the upstream response object is handed to
-        # the stream handler untouched (see ghc_api/sse/openai_responses.py).
-        self.enable_responses_early_failure_retry: bool = False
+        # yet. Enabled by default; it can be disabled to hand the upstream response
+        # object to the stream handler untouched (see ghc_api/sse/openai_responses.py).
+        self.enable_responses_early_failure_retry: bool = True
 
         # Retry settings
         self.max_connection_retries: int = 3  # Max retries for upstream connection errors
