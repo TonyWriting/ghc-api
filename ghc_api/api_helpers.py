@@ -263,6 +263,21 @@ def supports_responses_api(model_id: str) -> bool:
     return "/responses" in supported_endpoints
 
 
+def supports_embeddings_api(model_id: str) -> bool:
+    """Return whether Copilot advertises the model as an embedding model.
+
+    Embedding entries currently do not expose ``supported_endpoints``. Their
+    ``capabilities.type`` field is therefore the authoritative discriminator.
+    """
+    if not state.models or not state.models.get("data"):
+        return False
+
+    model = next((m for m in state.models["data"] if m.get("id") == model_id), None)
+    if not isinstance(model, dict):
+        return False
+    return model.get("capabilities", {}).get("type") == "embeddings"
+
+
 def supported_reasoning_efforts(model_id: str) -> set:
     """Reasoning-effort values Copilot reports for a model.
 
