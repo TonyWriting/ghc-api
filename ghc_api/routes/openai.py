@@ -941,9 +941,11 @@ def embeddings():
 
         duration = round(time.time() - start_time, 2)
         response_size = len(response.content)
+        result_is_json = True
         try:
             result = response.json()
         except ValueError:
+            result_is_json = False
             result = response.text
 
         if response.ok and isinstance(result, dict):
@@ -973,11 +975,15 @@ def embeddings():
             "user_id": user_id,
         })
 
-        if response.ok:
+        if response.ok and result_is_json:
             return jsonify(result)
 
+        upstream_content_type = response.headers.get("Content-Type", "application/json")
+        if response.ok:
+            return Response(response.content, status=response.status_code, content_type=upstream_content_type)
+
         log_error_request("/v1/embeddings", upstream_payload, response.text, response.status_code, client_ip)
-        return Response(response.text, status=response.status_code, mimetype="application/json")
+        return Response(response.content, status=response.status_code, content_type=upstream_content_type)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

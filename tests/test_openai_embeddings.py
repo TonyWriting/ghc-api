@@ -6,7 +6,7 @@ from ghc_api.state import state
 
 
 class FakeResponse:
-    def __init__(self, body, status_code=200, text=None):
+    def __init__(self, body, status_code=200, text=None, content_type="application/json"):
         self._body = body
         self.status_code = status_code
         self.ok = status_code < 400
@@ -15,6 +15,7 @@ class FakeResponse:
             import json
             self.text = json.dumps(body)
         self.content = self.text.encode("utf-8")
+        self.headers = {"Content-Type": content_type}
 
     def json(self):
         if isinstance(self._body, Exception):
@@ -91,6 +92,27 @@ class OpenAIEmbeddingsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"]["code"], "unsupported_model")
         post.assert_not_called()
+
+    @mock.patch("ghc_api.routes.openai.requests.post")
+    @mock.patch("ghc_api.routes.openai.get_copilot_headers", return_value={})
+    @mock.patch("ghc_api.routes.openai.ensure_copilot_token")
+    def test_successful_non_json_response_is_passed_through_unchanged(
+        self, _ensure_token, _headers, post
+    ):
+        post.return_value = FakeResponse(
+            ValueError("not json"),
+            text="upstream-body",
+            content_type="text/plain; charset=utf-8",
+        )
+
+        response = self.client.post("/v1/embeddings", json={
+            "model": "text-embedding-3-small",
+            "input": ["hello"],
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_data(), b"upstream-body")
+        self.assertEqual(response.content_type, "text/plain; charset=utf-8")
 
     @mock.patch("ghc_api.routes.openai.requests.post")
     @mock.patch("ghc_api.routes.openai.get_copilot_headers", return_value={})
