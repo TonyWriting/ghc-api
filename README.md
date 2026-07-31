@@ -119,12 +119,13 @@ disable_onedrive_access: true # If true, skip all OneDrive detection/sync/shared
 # Optional leaked tool-call recovery (direct Anthropic /v1/messages streaming)
 enable_tool_call_recovery: false # If true, recover tool calls Copilot leaks as plain text
 
-# Optional retry for /v1/responses streams that fail before any output
-enable_responses_early_failure_retry: false # If true, transparently retry a stream that
-                              # returns HTTP 200 then response.failed before any text,
-                              # reasoning, or tool call. Retries stop once real output has
-                              # been sent (never duplicates content) and are capped by
+# Retry /v1/responses streams that fail before any output (enabled by default)
+enable_responses_early_failure_retry: true # Transparently retry a stream that returns
+                              # HTTP 200 then response.failed before any text, reasoning,
+                              # or tool call. Retries stop once real output has been sent
+                              # (never duplicates content) and are capped by
                               # max_connection_retries. Each retry costs upstream quota.
+                              # Set false to disable.
 
 # Streaming reliability
 upstream_read_timeout: 1800   # Read timeout (seconds) for each upstream Copilot request
