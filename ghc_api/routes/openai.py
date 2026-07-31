@@ -1370,25 +1370,27 @@ def responses():
                 )
                 if use_streaming:
                     if response.ok:
-                        def retry_streaming_response():
-                            ensure_copilot_token()
-                            retry_headers = get_copilot_headers(enable_vision)
-                            return requests.post(
-                                f"{get_copilot_base_url()}/v1/responses",
-                                headers=retry_headers,
-                                json=payload,
-                                stream=True,
-                                timeout=state.upstream_read_timeout,
-                            )
+                        upstream_response = response
+                        if state.enable_responses_early_failure_retry:
+                            def retry_streaming_response():
+                                ensure_copilot_token()
+                                retry_headers = get_copilot_headers(enable_vision)
+                                return requests.post(
+                                    f"{get_copilot_base_url()}/v1/responses",
+                                    headers=retry_headers,
+                                    json=payload,
+                                    stream=True,
+                                    timeout=state.upstream_read_timeout,
+                                )
 
-                        retrying_response = RetryingResponsesResponse(
-                            response=response,
-                            response_factory=retry_streaming_response,
-                            max_retries=state.max_connection_retries,
-                            request_id=request_id,
-                        )
+                            upstream_response = RetryingResponsesResponse(
+                                response=response,
+                                response_factory=retry_streaming_response,
+                                max_retries=state.max_connection_retries,
+                                request_id=request_id,
+                            )
                         return OpenAIResponsesStreamHandler(
-                            response=retrying_response,
+                            response=upstream_response,
                             request_id=request_id,
                             request_size=request_size,
                             start_time=start_time,

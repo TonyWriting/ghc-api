@@ -6,6 +6,8 @@ subclass since the base alone has no concrete endpoint string.
 """
 
 import json
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -236,10 +238,92 @@ class OpenAIResponsesPassthroughTest(unittest.TestCase):
         self.assertEqual(entry["state"], RequestCache.STATE_ERROR)
 
 
+class _LazyStreamResponse:
+    """A ``requests.Response`` stand-in with real streaming semantics.
+
+    ``_FakeResponse`` above has a plain ``text = ""`` attribute, so it cannot
+    catch code that eagerly reads ``.text``. On a real ``stream=True`` response
+    ``.text`` goes through ``.content``, which drains the socket and blocks
+    until the upstream is done -- destroying streaming. This double reproduces
+    that: reading ``.text`` consumes the line iterator and records the access.
+    """
+
+    def __init__(self, lines):
+        self._lines = iter(lines)
+        self._buffered = []
+        self.status_code = 200
+        self.ok = True
+        self.text_accessed = False
+        self.closed = False
+
+    @property
+    def text(self):
+        self.text_accessed = True
+        self._buffered.extend(self._lines)  # blocks until upstream finishes
+        return b"\n".join(self._buffered).decode()
+
+    def iter_lines(self):
+        buffered, self._buffered = self._buffered, []
+        yield from buffered
+        yield from self._lines
+
+    def close(self):
+        self.closed = True
+
+
 class RetryingResponsesResponseTest(unittest.TestCase):
     @staticmethod
     def _event(event_type, **extra):
         return f'data: {json.dumps({"type": event_type, **extra})}'.encode()
+
+    def test_construction_does_not_read_the_streaming_body(self):
+        """The wrapper is built inside the request handler, before Flask starts
+        iterating. Touching ``.text`` there would block the route until the
+        model finished generating and buffer the whole response in memory.
+        """
+        upstream = _LazyStreamResponse([self._event("response.created")])
+
+        wrapper = RetryingResponsesResponse(upstream, mock.Mock(), 1, "req-lazy")
+
+        self.assertFalse(
+            upstream.text_accessed,
+            "RetryingResponsesResponse must not read response.text; on a real "
+            "streaming response that drains the body and kills streaming",
+        )
+        self.assertEqual(wrapper.status_code, 200)
+        self.assertTrue(wrapper.ok)
+
+    def test_output_reaches_the_client_before_upstream_finishes(self):
+        """End-to-end liveness: a delta must be forwarded while the upstream is
+        still generating, not after the stream closes.
+        """
+        upstream_still_generating = threading.Event()
+
+        def lines():
+            yield self._event("response.output_text.delta", delta="first")
+            # Upstream keeps the connection open while the model thinks.
+            upstream_still_generating.wait(10)
+            yield self._event("response.output_text.delta", delta="second")
+
+        upstream = _LazyStreamResponse(lines())
+        wrapper = RetryingResponsesResponse(upstream, mock.Mock(), 1, "req-live")
+
+        started = time.time()
+        stream = wrapper.iter_lines()
+        try:
+            first = next(stream)
+            elapsed = time.time() - started
+        finally:
+            upstream_still_generating.set()
+            stream.close()
+
+        self.assertEqual(first, self._event("response.output_text.delta", delta="first"))
+        self.assertFalse(upstream.text_accessed)
+        self.assertLess(
+            elapsed, 5,
+            "the first delta must be yielded immediately, not after the whole "
+            "upstream stream has been consumed",
+        )
 
     def test_retries_early_response_failed_without_forwarding_failed_attempt(self):
         first = _FakeResponse([

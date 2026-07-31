@@ -42,10 +42,17 @@ class RetryingResponsesResponse:
         self._max_retries = max(0, max_retries)
         self._request_id = request_id
 
-        # SSEStreamHandler reads these attributes before iterating.
+        # SSEStreamHandler reads these attributes before iterating. ``text`` is a
+        # property on purpose: on a ``stream=True`` response ``Response.text``
+        # goes through ``Response.content``, which drains the socket and blocks
+        # until upstream is done. Reading it here would turn every streaming
+        # request into a buffered one.
         self.status_code = response.status_code
         self.ok = response.ok
-        self.text = response.text
+
+    @property
+    def text(self) -> str:
+        return self._response.text
 
     @staticmethod
     def _event_type(line) -> Optional[str]:

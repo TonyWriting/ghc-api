@@ -59,7 +59,7 @@ By default, the server will start on `http://localhost:8313`.
 - `-c` or `--config`: Generate a YAML config file in `~/.ghc-api/config.yaml`
 - `--delete-github-token`: Delete the locally saved `github_token.txt` and exit
 - `--github-device-login`: Run GitHub Device Flow, replace the locally saved token, and exit
-- `-v` or `--version`: Show version (for example `ghc-api 1.0.21`)
+- `-v` or `--version`: Show version (for example `ghc-api 1.0.22`)
 - `--help`: Show help message
 
 ### Configuration
@@ -118,6 +118,13 @@ disable_onedrive_access: true # If true, skip all OneDrive detection/sync/shared
 
 # Optional leaked tool-call recovery (direct Anthropic /v1/messages streaming)
 enable_tool_call_recovery: false # If true, recover tool calls Copilot leaks as plain text
+
+# Optional retry for /v1/responses streams that fail before any output
+enable_responses_early_failure_retry: false # If true, transparently retry a stream that
+                              # returns HTTP 200 then response.failed before any text,
+                              # reasoning, or tool call. Retries stop once real output has
+                              # been sent (never duplicates content) and are capped by
+                              # max_connection_retries. Each retry costs upstream quota.
 
 # Streaming reliability
 upstream_read_timeout: 1800   # Read timeout (seconds) for each upstream Copilot request
